@@ -1536,7 +1536,6 @@ class HostMetricList(ListAPIView):
     name = _("Host Metrics List")
     model = models.HostMetric
     serializer_class = serializers.HostMetricSerializer
-    permission_classes = (IsSystemAdminOrAuditor,)
     search_fields = ('hostname', 'deleted')
 
 
@@ -1544,7 +1543,6 @@ class HostMetricDetail(RetrieveDestroyAPIView):
     name = _("Host Metric Detail")
     model = models.HostMetric
     serializer_class = serializers.HostMetricSerializer
-    permission_classes = (IsSystemAdminOrAuditor,)
 
     def delete(self, request, *args, **kwargs):
         self.get_object().soft_delete()
@@ -1555,7 +1553,6 @@ class HostMetricDetail(RetrieveDestroyAPIView):
 class HostMetricSummaryMonthlyList(ListAPIView):
     name = _("Host Metrics Summary Monthly")
     model = models.HostMetricSummaryMonthly
-    permission_classes = (IsSystemAdminOrAuditor,)
     serializer_class = serializers.HostMetricSummaryMonthlySerializer
     search_fields = ('date',)
     filter_backends = [HostMetricSummaryMonthlyFieldLookupBackend]
