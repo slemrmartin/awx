@@ -5005,8 +5005,6 @@ class InstanceHealthCheckSerializer(BaseSerializer):
 
 
 class HostMetricSerializer(BaseSerializer):
-    show_capabilities = ['delete']
-
     class Meta:
         model = HostMetric
         fields = (

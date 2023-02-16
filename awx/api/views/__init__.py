@@ -1538,6 +1538,9 @@ class HostMetricList(ListAPIView):
     serializer_class = serializers.HostMetricSerializer
     search_fields = ('hostname', 'deleted')
 
+    def get_queryset(self):
+        return self.model.objects.all()
+
 
 class HostMetricDetail(RetrieveDestroyAPIView):
     name = _("Host Metric Detail")
@@ -1558,7 +1561,7 @@ class HostMetricSummaryMonthlyList(ListAPIView):
     filter_backends = [HostMetricSummaryMonthlyFieldLookupBackend]
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = self.model.objects.all()
         past_months = self.request.query_params.get('past_months', None)
         date_from = self._get_date_from(past_months)
 
