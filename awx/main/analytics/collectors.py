@@ -4,7 +4,9 @@ import os
 import os.path
 import platform
 import distro
+import datetime
 
+import pytz
 from django.db import connection
 from django.db.models import Count
 from django.conf import settings
@@ -67,6 +69,26 @@ def four_hour_slicing(key, since, until, last_gather):
         end = min(start + timedelta(hours=4), until)
         yield (start, end)
         start = end
+
+
+def host_metric_slicing(key, since, until, last_gather):
+    """
+    Slicing doesn't start 4 weeks ago, but sends whole table first time
+    TODO: add full sync once per week + modify to generic method to get key -> django model mapping
+    """
+    if since is not None:
+        return [(since, until)]
+
+    from awx.conf.models import Setting
+
+    horizon = datetime.datetime(year=1900, month=1, day=1, tzinfo=pytz.UTC)
+
+    last_entries = Setting.objects.filter(key='AUTOMATION_ANALYTICS_LAST_ENTRIES').first()
+    last_entries = json.loads((last_entries.value if last_entries is not None else '') or '{}', object_hook=datetime_hook)
+
+    last_entry = last_entries.get(key) or horizon
+    print(f"HOST METRIC SLICING: {last_entry} | {until}")
+    return [(last_entry, until)]
 
 
 def _identify_lower(key, since, until, last_gather):
@@ -537,3 +559,23 @@ def workflow_job_template_node_table(since, full_path, **kwargs):
                                  ) always_nodes ON main_workflowjobtemplatenode.id = always_nodes.from_workflowjobtemplatenode_id
                                  ORDER BY main_workflowjobtemplatenode.id ASC) TO STDOUT WITH CSV HEADER'''
     return _copy_table(table='workflow_job_template_node', query=workflow_job_template_node_query, path=full_path)
+
+
+@register('host_metric_table', '1.0', format='csv', description=_('Host Metric data, incremental/full sync'), expensive=host_metric_slicing)
+def host_metric_table(since, full_path, until, **kwargs):
+    host_metric_query = '''COPY (SELECT main_hostmetric.id,
+                                        main_hostmetric.hostname,
+                                        main_hostmetric.first_automation,
+                                        main_hostmetric.last_automation,
+                                        main_hostmetric.last_deleted,
+                                        main_hostmetric.deleted,
+                                        main_hostmetric.automated_counter,
+                                        main_hostmetric.deleted_counter,
+                                        main_hostmetric.used_in_inventories
+                                FROM main_hostmetric
+                                WHERE (main_hostmetric.last_automation > '{}' AND main_hostmetric.last_automation <= '{}') OR
+                                       (main_hostmetric.last_deleted > '{}' AND main_hostmetric.last_deleted <= '{}')
+                                ORDER BY main_hostmetric.id ASC) TO STDOUT WITH CSV HEADER'''.format(
+        since.isoformat(), until.isoformat(), since.isoformat(), until.isoformat()
+    )
+    return _copy_table(table='host_metric', query=host_metric_query, path=full_path)
