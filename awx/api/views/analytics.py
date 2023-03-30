@@ -6,9 +6,10 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 from django.utils import translation
 
-from awx.api.generics import APIView, Response
+from awx.api.generics import GenericAPIView, APIView, Response
 from awx.api.permissions import IsSystemAdminOrAuditor
 from awx.api.versioning import reverse
+from awx.api.serializers import AnalyticsReportSerializer
 from awx.main.utils import get_awx_version
 from rest_framework.permissions import AllowAny
 from rest_framework import status
@@ -50,7 +51,23 @@ class AnalyticsRootView(APIView):
 
     def get(self, request, format=None):
         data = OrderedDict()
-        data['reports'] = reverse('analytics_reports_list')
+        data['authorized'] = reverse('api:analytics_authorized')
+        data['reports'] = reverse('api:analytics_reports_list')
+        data['report_options'] = reverse('api:analytics_report_options_list')
+        data['adoption_rate'] = reverse('api:analytics_adoption_rate')
+        data['adoption_rate_options'] = reverse('api:analytics_adoption_rate_options')
+        data['event_explorer'] = reverse('api:analytics_event_explorer')
+        data['event_explorer_options'] = reverse('api:analytics_event_explorer_options')
+        data['host_explorer'] = reverse('api:analytics_host_explorer')
+        data['host_explorer_options'] = reverse('api:analytics_host_explorer_options')
+        data['job_explorer'] = reverse('api:analytics_job_explorer')
+        data['job_explorer_options'] = reverse('api:analytics_job_explorer_options')
+        data['probe_templates'] = reverse('api:analytics_probe_templates_explorer')
+        data['probe_templates_options'] = reverse('api:analytics_probe_templates_options')
+        data['probe_template_for_hosts'] = reverse('api:analytics_probe_template_for_hosts_explorer')
+        data['probe_template_for_hosts_options'] = reverse('api:analytics_probe_template_for_hosts_options')
+        data['roi_templates'] = reverse('api:analytics_roi_templates_explorer')
+        data['roi_templates_options'] = reverse('api:analytics_roi_templates_options')
         return Response(data)
 
 
@@ -114,25 +131,11 @@ class AnalyticsGenericView(APIView):
         return analytics_url
 
     @staticmethod
-    def _check_upload_enabled():
-        state = getattr(settings, 'INSIGHTS_TRACKING_STATE', False)
-        if not state:
-            raise MissingSettings(ERROR_UPLOAD_NOT_ENABLED)
-        return True
-
-    @staticmethod
-    def _get_rh_user():
-        user = getattr(settings, 'REDHAT_USERNAME', None)
-        if not user:
-            raise MissingSettings(ERROR_MISSING_USER)
-        return user
-
-    @staticmethod
-    def _get_rh_password():
-        password = getattr(settings, 'REDHAT_PASSWORD', None)
-        if not password:
-            raise MissingSettings(ERROR_MISSING_PASSWORD)
-        return password
+    def _get_setting(setting_name, default, error_message):
+        setting = getattr(settings, setting_name, default)
+        if not setting:
+            raise MissingSettings(error_message)
+        return setting
 
     @staticmethod
     def _error_response(keyword, message=None, remote=True, remote_status_code=None, status_code=status.HTTP_403_FORBIDDEN):
@@ -172,10 +175,10 @@ class AnalyticsGenericView(APIView):
         try:
             headers = self._request_headers(request)
 
-            self._check_upload_enabled()
+            self._get_setting('INSIGHTS_TRACKING_STATE', False, ERROR_UPLOAD_NOT_ENABLED)
             url = self._get_analytics_url(request.path)
-            rh_user = self._get_rh_user()
-            rh_password = self._get_rh_password()
+            rh_user = self._get_setting('REDHAT_USERNAME', None, ERROR_MISSING_USER)
+            rh_password = self._get_setting('REDHAT_PASSWORD', None, ERROR_MISSING_PASSWORD)
 
             if method == "GET":
                 response = requests.get(url, auth=(rh_user, rh_password), verify=CERT_PATH, params=request.query_params, headers=headers, json=request.data)
@@ -231,9 +234,10 @@ class AnalyticsAuthorizedView(AnalyticsGenericListView):
     name = _("Authorized")
 
 
-class AnalyticsReportsList(GetNotAllowedMixin, AnalyticsGenericListView):
+class AnalyticsReportsList(GenericAPIView, GetNotAllowedMixin, AnalyticsGenericListView):
     name = _("Reports")
     swagger_topic = "Automation Analytics"
+    serializer_class = AnalyticsReportSerializer
 
 
 class AnalyticsReportDetail(AnalyticsGenericDetailView):
